@@ -1,0 +1,20 @@
+# Empêcher l'exécution de scripts
+<FilesMatch "\.(php|js|py|pl|sh|cgi)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Autoriser seulement les images
+<FilesMatch "\.(jpg|jpeg|png|gif|webp|svg)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# Empêcher l'accès aux fichiers cachés
+<FilesMatch "^\.">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Désactiver l'exécution de scripts
+Options -ExecCGI 
