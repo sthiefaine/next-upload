@@ -86,7 +86,7 @@ export async function DELETE(request: NextRequest) {
           message: `Dossier "${target}" supprimé avec succès`
         });
         
-      } catch (error) {
+      } catch {
         return NextResponse.json(
           { error: 'Le dossier n\'existe pas' },
           { status: 404 }
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest) {
           message: 'Fichier supprimé avec succès'
         });
         
-      } catch (error) {
+      } catch {
         return NextResponse.json(
           { error: 'Le fichier n\'existe pas' },
           { status: 404 }

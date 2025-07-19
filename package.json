@@ -6,7 +6,11 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "lint:quiet": "eslint . --quiet --ext .ts,.tsx,.js,.jsx",
+    "lint:src": "eslint src/ --ext .ts,.tsx,.js,.jsx --quiet",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@types/formidable": "^3.4.5",

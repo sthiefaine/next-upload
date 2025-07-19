@@ -109,7 +109,14 @@ export async function GET(request: NextRequest) {
         const items = await fs.readdir(uploadsDir, { withFileTypes: true });
         const folders = items.filter(item => item.isDirectory());
         
-        const allFiles: any[] = [];
+        const allFiles: Array<{
+          name: string;
+          path: string;
+          folder: string;
+          size: number;
+          sizeFormatted: string;
+          type: string;
+        }> = [];
         let totalSize = 0;
         
         for (const folderItem of folders) {

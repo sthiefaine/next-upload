@@ -348,7 +348,7 @@ export default function UploadPage() {
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                Nom d'utilisateur
+                Nom d&apos;utilisateur
               </label>
               <input
                 type="text"
@@ -395,7 +395,7 @@ export default function UploadPage() {
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload d'Images</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload d&apos;Images</h1>
               <p className="text-gray-600">Connecté en tant que {username}</p>
             </div>
             <div className="text-right">
@@ -610,8 +610,8 @@ export default function UploadPage() {
                 Confirmer la suppression
               </h3>
               <p className="text-gray-600 mb-6">
-                Êtes-vous sûr de vouloir supprimer {deleteType === 'folder' ? 'le dossier' : 'le fichier'} "{deleteTarget}" ?
-                {deleteType === 'folder' && ' Cette action supprimera également tous les fichiers qu\'il contient.'}
+                Êtes-vous sûr de vouloir supprimer {deleteType === 'folder' ? 'le dossier' : 'le fichier'} &quot;{deleteTarget}&quot; ?
+                {deleteType === 'folder' && ' Cette action supprimera également tous les fichiers qu&apos;il contient.'}
               </p>
               <div className="flex space-x-4">
                 <button

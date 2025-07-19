@@ -7,7 +7,7 @@ export default function Home() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Next.js Upload</h1>
           <p className="text-gray-600 mb-6">
-            Interface moderne pour l'upload d'images avec authentification
+            Interface moderne pour l&apos;upload d&apos;images avec authentification
           </p>
         </div>
         
@@ -16,7 +16,7 @@ export default function Home() {
             href="/upload"
             className="block w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
-            Accéder à l'upload
+            Accéder à l&apos;upload
           </Link>
           
           <div className="text-sm text-gray-500">
