@@ -8,7 +8,7 @@
     "@typescript-eslint/no-this-alias": "off",
     "@typescript-eslint/ban-ts-comment": "off",
     "@next/next/no-assign-module-variable": "off",
-    "no-unused-vars": "off"
+    "no-unused-vars": "off",
   },
   "ignorePatterns": [
     "node_modules/",
