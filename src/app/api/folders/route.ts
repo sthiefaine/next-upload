@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-// Fonction pour vérifier l'authentification
-function checkAuth(username: string, password: string): boolean {
-  const expectedUser = process.env.USER;
-  const expectedPassword = process.env.PASSWORD;
-  return username === expectedUser && password === expectedPassword;
-}
+import { checkAuthFromToken } from '@/lib/auth';
 
 // Fonction pour scanner récursivement les dossiers
 async function scanFoldersRecursive(dirPath: string, basePath: string = ''): Promise<string[]> {
@@ -44,12 +39,10 @@ async function scanFoldersRecursive(dirPath: string, basePath: string = ''): Pro
 // GET - Lire tous les dossiers dans uploads
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
         { error: 'Authentification requise' },
         { status: 401 }
@@ -92,10 +85,12 @@ export async function GET(request: NextRequest) {
       
     } catch (error) {
       console.error('Erreur lors de la lecture des dossiers:', error);
-      return NextResponse.json(
-        { error: 'Erreur lors de la lecture des dossiers' },
-        { status: 500 }
-      );
+      // Retourner une réponse vide en cas d'erreur plutôt qu'une erreur 500
+      return NextResponse.json({
+        success: true,
+        folders: [],
+        totalFolders: 0
+      });
     }
     
   } catch (error) {
@@ -110,12 +105,10 @@ export async function GET(request: NextRequest) {
 // POST - Créer un nouveau dossier
 export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
         { error: 'Authentification requise' },
         { status: 401 }

@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-// Fonction pour vérifier l'authentification
-function checkAuth(username: string, password: string): boolean {
-  const expectedUser = process.env.USER;
-  const expectedPassword = process.env.PASSWORD;
-  
-  return username === expectedUser && password === expectedPassword;
-}
+import { checkAuthFromToken } from '@/lib/auth';
 
 // Fonction pour valider le nom du dossier
 function isValidFolderName(folderName: string): boolean {
@@ -36,17 +30,25 @@ async function deleteFolderRecursive(folderPath: string): Promise<void> {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
-    const type = searchParams.get('type'); // 'folder' ou 'file'
-    const target = searchParams.get('target'); // nom du dossier ou chemin du fichier
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
         { error: 'Authentification échouée' },
         { status: 401 }
       );
+    }
+    
+    // Support pour les deux formats : ancien (type/target) et nouveau (filePath)
+    let type = searchParams.get('type');
+    let target = searchParams.get('target');
+    const filePath = searchParams.get('filePath');
+    
+    // Si filePath est fourni, on l'utilise pour la suppression de fichier
+    if (filePath) {
+      type = 'file';
+      target = decodeURIComponent(filePath);
     }
     
     if (!type || !target) {
@@ -97,8 +99,11 @@ export async function DELETE(request: NextRequest) {
       // Supprimer un fichier
       const filePath = path.join(process.cwd(), 'public', target);
       
+      console.log('Tentative de suppression du fichier:', filePath);
+      
       // Vérifier que le fichier est dans le dossier uploads
       if (!filePath.startsWith(path.join(process.cwd(), 'public', 'uploads'))) {
+        console.log('Chemin invalide:', filePath);
         return NextResponse.json(
           { error: 'Chemin de fichier invalide' },
           { status: 400 }
@@ -108,34 +113,35 @@ export async function DELETE(request: NextRequest) {
       try {
         const stats = await fs.stat(filePath);
         if (!stats.isFile()) {
+          console.log('Le fichier n\'existe pas ou n\'est pas un fichier:', filePath);
           return NextResponse.json(
             { error: 'Le fichier n\'existe pas' },
             { status: 404 }
           );
         }
         
-        // Vérifier que c'est bien une image
+        // Vérifier que c'est bien une image (optionnel pour la suppression)
         const ext = path.extname(filePath).toLowerCase();
-        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.mp4', '.avi', '.mov', '.pdf', '.doc', '.docx', '.txt'];
         
         if (!allowedExtensions.includes(ext)) {
-          return NextResponse.json(
-            { error: 'Type de fichier non autorisé' },
-            { status: 400 }
-          );
+          console.log('Extension non autorisée:', ext);
+          // On continue quand même pour permettre la suppression de tous types de fichiers
         }
         
         await fs.unlink(filePath);
+        console.log('Fichier supprimé avec succès:', filePath);
         
         return NextResponse.json({
           success: true,
           message: 'Fichier supprimé avec succès'
         });
         
-      } catch {
+      } catch (error) {
+        console.error('Erreur lors de la suppression du fichier:', filePath, error);
         return NextResponse.json(
-          { error: 'Le fichier n\'existe pas' },
-          { status: 404 }
+          { error: `Erreur lors de la suppression: ${error instanceof Error ? error.message : 'Erreur inconnue'}` },
+          { status: 500 }
         );
       }
       

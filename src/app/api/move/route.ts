@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
-
-// Fonction pour vérifier l'authentification
-function checkAuth(username: string, password: string): boolean {
-  const expectedUser = process.env.USER;
-  const expectedPassword = process.env.PASSWORD;
-  return username === expectedUser && password === expectedPassword;
-}
+import { checkAuthFromToken } from '@/lib/auth';
 
 // Fonction pour valider le nom du dossier
 function isValidFolderName(folderName: string): boolean {
@@ -15,301 +9,164 @@ function isValidFolderName(folderName: string): boolean {
   return validPattern.test(folderName) && folderName.length > 0 && folderName.length <= 50;
 }
 
-// Fonction pour créer le fichier .htaccess
-async function createHtaccess(folderPath: string) {
-  const htaccessContent = `# Désactiver l'exécution de scripts
-<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
-  Order Deny,Allow
-  Deny from all
-</FilesMatch>
-
-# Autoriser seulement les images
-<FilesMatch "\.(jpg|jpeg|png|gif|webp|svg)$">
-  Order Allow,Deny
-  Allow from all
-</FilesMatch>
-
-# Désactiver l'exécution de scripts dans ce dossier
-Options -ExecCGI
-RemoveHandler .php .php3 .php4 .php5 .phtml .pl .py .jsp .asp .sh .cgi
-`;
-
-  await fs.writeFile(path.join(folderPath, '.htaccess'), htaccessContent);
-}
-
-// Fonction pour copier récursivement un dossier
-async function copyFolderRecursive(source: string, destination: string) {
-  // Créer le dossier de destination s'il n'existe pas
-  await fs.mkdir(destination, { recursive: true });
-  
-  // Créer le .htaccess dans le nouveau dossier
-  await createHtaccess(destination);
-  
-  const items = await fs.readdir(source, { withFileTypes: true });
-  
-  for (const item of items) {
-    const sourcePath = path.join(source, item.name);
-    const destPath = path.join(destination, item.name);
-    
-    if (item.isDirectory()) {
-      // Copier récursivement les sous-dossiers
-      await copyFolderRecursive(sourcePath, destPath);
-    } else if (item.isFile()) {
-      // Copier tous les fichiers (le .htaccess sera écrasé par createHtaccess)
-      await fs.copyFile(sourcePath, destPath);
-    }
-  }
-}
-
-// Fonction pour supprimer récursivement un dossier
-async function removeFolderRecursive(folderPath: string) {
-  const items = await fs.readdir(folderPath, { withFileTypes: true });
-  
-  for (const item of items) {
-    const itemPath = path.join(folderPath, item.name);
-    
-    if (item.isDirectory()) {
-      await removeFolderRecursive(itemPath);
-    } else {
-      await fs.unlink(itemPath);
-    }
-  }
-  
-  await fs.rmdir(folderPath);
-}
-
-// Fonction pour scanner récursivement les dossiers
-async function scanFoldersRecursive(dirPath: string, basePath: string = ''): Promise<string[]> {
-  const folders: string[] = [];
+// Fonction pour déplacer récursivement un dossier
+async function moveDirectory(src: string, dest: string): Promise<{ success: boolean; moved: number; errors: string[] }> {
+  const results = { success: false, moved: 0, errors: [] as string[] };
   
   try {
-    const items = await fs.readdir(dirPath, { withFileTypes: true });
+    // Créer le dossier de destination s'il n'existe pas
+    await fs.mkdir(dest, { recursive: true });
+    
+    // Lire le contenu du dossier source
+    const items = await fs.readdir(src);
     
     for (const item of items) {
-      if (item.isDirectory()) {
-        const folderPath = path.join(basePath, item.name);
-        folders.push(folderPath);
+      const srcPath = path.join(src, item);
+      const destPath = path.join(dest, item);
+      
+      try {
+        const stat = await fs.stat(srcPath);
         
-        // Scanner récursivement les sous-dossiers
-        const subDirPath = path.join(dirPath, item.name);
-        const subFolders = await scanFoldersRecursive(subDirPath, folderPath);
-        folders.push(...subFolders);
+        if (stat.isDirectory()) {
+          // Récursivement déplacer les sous-dossiers
+          const subResult = await moveDirectory(srcPath, destPath);
+          results.moved += subResult.moved;
+          results.errors.push(...subResult.errors);
+        } else {
+          // Déplacer le fichier
+          await fs.rename(srcPath, destPath);
+          results.moved++;
+        }
+      } catch (error) {
+        results.errors.push(`Erreur lors du déplacement de ${item}: ${error}`);
       }
     }
+    
+    // Supprimer le dossier source s'il est vide
+    try {
+      const remainingItems = await fs.readdir(src);
+      if (remainingItems.length === 0) {
+        await fs.rmdir(src);
+      }
+    } catch (error) {
+      // Ignorer l'erreur si le dossier n'est pas vide
+    }
+    
+    results.success = results.moved > 0;
+    return results;
+    
   } catch (error) {
-    console.error('Erreur lors du scan du dossier:', dirPath, error);
+    results.errors.push(`Erreur générale: ${error}`);
+    return results;
   }
-  
-  return folders;
 }
 
-// Fonction pour vérifier si un chemin est un sous-chemin d'un autre
-function isSubPath(parent: string, child: string): boolean {
-  const normalizedParent = path.normalize(parent);
-  const normalizedChild = path.normalize(child);
-  return normalizedChild.startsWith(normalizedParent + path.sep);
-}
-
-// POST - Déplacer un dossier ou fichier
 export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
+    const authHeader = request.headers.get('authorization');
     
-    // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
         { error: 'Authentification requise' },
         { status: 401 }
       );
     }
-    
+
     const body = await request.json();
-    const { source, destination, type = 'folder' } = body;
-    
-    if (!source || !destination) {
+    const { sourceFolder, targetFolder } = body;
+
+    if (!sourceFolder) {
       return NextResponse.json(
-        { error: 'Source et destination requises' },
+        { error: 'Dossier source requis' },
         { status: 400 }
       );
     }
-    
+
+    if (!targetFolder) {
+      return NextResponse.json(
+        { error: 'Dossier de destination requis' },
+        { status: 400 }
+      );
+    }
+
+    // Vérifier que le dossier source existe
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    const sourcePath = path.join(uploadsDir, sourceFolder);
     
-    // Construire les chemins complets
-    const sourcePath = path.join(uploadsDir, source);
-    const destPath = path.join(uploadsDir, destination);
-    
-    // Vérifier que la source existe
     try {
-      const sourceStats = await fs.stat(sourcePath);
-      if (type === 'folder' && !sourceStats.isDirectory()) {
-        return NextResponse.json(
-          { error: 'La source n\'est pas un dossier' },
-          { status: 400 }
-        );
-      }
-      if (type === 'file' && !sourceStats.isFile()) {
-        return NextResponse.json(
-          { error: 'La source n\'est pas un fichier' },
-          { status: 400 }
-        );
-      }
-    } catch (error) {
-      return NextResponse.json(
-        { error: 'La source n\'existe pas' },
-        { status: 404 }
-      );
-    }
-    
-    // Vérifier que la source et la destination ne sont pas identiques
-    if (source === destination) {
-      return NextResponse.json(
-        { error: 'La source et la destination ne peuvent pas être identiques' },
-        { status: 400 }
-      );
-    }
-    
-    // Vérifier qu'on ne déplace pas un dossier dans lui-même ou un de ses sous-dossiers
-    if (type === 'folder' && isSubPath(source, destination)) {
-      return NextResponse.json(
-        { error: 'Impossible de déplacer un dossier dans lui-même ou un de ses sous-dossiers' },
-        { status: 400 }
-      );
-    }
-    
-    // Créer le dossier parent de destination s'il n'existe pas
-    const destParent = path.dirname(destPath);
-    try {
-      await fs.access(destParent);
+      await fs.access(sourcePath);
     } catch {
-      await fs.mkdir(destParent, { recursive: true });
-      await createHtaccess(destParent);
+      return NextResponse.json(
+        { error: 'Le dossier source n\'existe pas' },
+        { status: 400 }
+      );
     }
+
+    // Analyser le chemin de destination
+    const targetPathParts = targetFolder.split('/');
+    const targetDirName = targetPathParts[targetPathParts.length - 1];
+    const targetParentPath = targetPathParts.slice(0, -1).join('/');
     
-    if (type === 'folder') {
-      // Vérifier si la destination existe déjà
+    // Valider le nom du dossier de destination
+    if (!isValidFolderName(targetDirName)) {
+      return NextResponse.json(
+        { error: 'Nom de dossier de destination invalide' },
+        { status: 400 }
+      );
+    }
+
+    // Construire le chemin complet de destination
+    let targetPath: string;
+    if (targetParentPath) {
+      // Déplacer dans un sous-dossier existant
+      const parentPath = path.join(uploadsDir, targetParentPath);
       try {
-        const destStats = await fs.stat(destPath);
-        if (destStats.isDirectory()) {
-          // Si c'est un dossier, on peut fusionner le contenu
-          // Copier le contenu du dossier source dans le dossier destination
-          await copyFolderRecursive(sourcePath, destPath);
-          // Supprimer le dossier source
-          await removeFolderRecursive(sourcePath);
-          
-          return NextResponse.json({
-            success: true,
-            message: `Contenu du dossier "${source}" fusionné dans "${destination}"`,
-            source: source,
-            destination: destination
-          });
-        } else {
-          return NextResponse.json(
-            { error: 'La destination existe déjà et n\'est pas un dossier' },
-            { status: 409 }
-          );
-        }
+        await fs.access(parentPath);
       } catch {
-        // La destination n'existe pas, on peut déplacer normalement
-        await copyFolderRecursive(sourcePath, destPath);
-        await removeFolderRecursive(sourcePath);
-        
-        return NextResponse.json({
-          success: true,
-          message: `Dossier "${source}" déplacé vers "${destination}"`,
-          source: source,
-          destination: destination
-        });
-      }
-      
-    } else if (type === 'file') {
-      // Vérifier si le fichier de destination existe déjà
-      try {
-        await fs.access(destPath);
         return NextResponse.json(
-          { error: 'Le fichier de destination existe déjà' },
-          { status: 409 }
+          { error: 'Le dossier parent de destination n\'existe pas' },
+          { status: 400 }
         );
-      } catch {
-        // Le fichier de destination n'existe pas, on peut déplacer
-        await fs.copyFile(sourcePath, destPath);
-        await fs.unlink(sourcePath);
-        
-        return NextResponse.json({
-          success: true,
-          message: `Fichier "${source}" déplacé vers "${destination}"`,
-          source: source,
-          destination: destination
-        });
       }
+      targetPath = path.join(parentPath, targetDirName);
+    } else {
+      // Déplacer à la racine
+      targetPath = path.join(uploadsDir, targetDirName);
     }
+
+    // Vérifier que le dossier de destination n'existe pas déjà
+    try {
+      await fs.access(targetPath);
+      return NextResponse.json(
+        { error: 'Le dossier de destination existe déjà' },
+        { status: 400 }
+      );
+    } catch {
+      // Le dossier de destination n'existe pas, c'est bien
+    }
+
+    // Déplacer le dossier
+    const result = await moveDirectory(sourcePath, targetPath);
     
-    return NextResponse.json(
-      { error: 'Type invalide (folder ou file)' },
-      { status: 400 }
-    );
-    
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        message: `Dossier "${sourceFolder}" déplacé vers "${targetFolder}"`,
+        moved: result.moved,
+        errors: result.errors
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        error: 'Aucun fichier déplacé',
+        errors: result.errors
+      }, { status: 500 });
+    }
+
   } catch (error) {
     console.error('Erreur lors du déplacement:', error);
     return NextResponse.json(
       { error: 'Erreur lors du déplacement' },
-      { status: 500 }
-    );
-  }
-}
-
-// GET - Lister les dossiers disponibles pour le déplacement
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
-    
-    // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
-      return NextResponse.json(
-        { error: 'Authentification requise' },
-        { status: 401 }
-      );
-    }
-    
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    
-    try {
-      // Scanner récursivement tous les dossiers
-      const allFolders = await scanFoldersRecursive(uploadsDir);
-      
-      // Trier les dossiers (d'abord les dossiers parents, puis les enfants)
-      allFolders.sort((a, b) => {
-        const aDepth = a.split(path.sep).length;
-        const bDepth = b.split(path.sep).length;
-        
-        if (aDepth !== bDepth) {
-          return aDepth - bDepth;
-        }
-        
-        return a.localeCompare(b);
-      });
-      
-      return NextResponse.json({
-        success: true,
-        folders: allFolders,
-        totalFolders: allFolders.length
-      });
-      
-    } catch (error) {
-      return NextResponse.json(
-        { error: 'Erreur lors de la lecture des dossiers' },
-        { status: 500 }
-      );
-    }
-    
-  } catch (error) {
-    console.error('Erreur lors de la lecture des dossiers:', error);
-    return NextResponse.json(
-      { error: 'Erreur lors de la lecture des dossiers' },
       { status: 500 }
     );
   }

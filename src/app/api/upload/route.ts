@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-// Fonction pour vérifier l'authentification
-function checkAuth(username: string, password: string): boolean {
-  const expectedUser = process.env.USER;
-  const expectedPassword = process.env.PASSWORD;
-  
-  return username === expectedUser && password === expectedPassword;
-}
+import { checkAuthFromToken } from '@/lib/auth';
 
 // Fonction pour valider le type MIME
 function isValidImageType(mimetype: string): boolean {
@@ -43,14 +37,11 @@ function isValidFolderName(folderName: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    
-    // Récupérer les données d'authentification
-    const username = formData.get('username') as string;
-    const password = formData.get('password') as string;
+    const authHeader = request.headers.get('authorization');
     const folder = formData.get('folder') as string;
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
         { error: 'Authentification échouée' },
         { status: 401 }

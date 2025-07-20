@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { list, del } from '@vercel/blob';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { checkAuthFromToken } from '@/lib/auth';
 
 // Configuration Vercel Blob avec token dynamique
 function createBlobClient(token: string) {
@@ -9,14 +10,6 @@ function createBlobClient(token: string) {
     list: () => list({ token }),
     del: (url: string) => del(url, { token })
   };
-}
-
-// Fonction pour vérifier l'authentification
-function checkAuth(username: string, password: string): boolean {
-  const expectedUser = process.env.USER;
-  const expectedPassword = process.env.PASSWORD;
-  
-  return username === expectedUser && password === expectedPassword;
 }
 
 // Fonction pour valider le nom du dossier
@@ -48,20 +41,19 @@ function formatFileSize(bytes: number): string {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
-    const token = searchParams.get('token');
+    const blobToken = searchParams.get('token');
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
-        { error: 'Authentification échouée' },
+        { error: 'Authentification requise' },
         { status: 401 }
       );
     }
 
     // Vérifier le token Vercel Blob
-    if (!token) {
+    if (!blobToken) {
       return NextResponse.json(
         { error: 'Token Vercel Blob requis' },
         { status: 400 }
@@ -69,7 +61,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Créer le client Vercel Blob avec le token
-    const blobClient = createBlobClient(token);
+    const blobClient = createBlobClient(blobToken);
 
     // Lister tous les blobs
     const { blobs } = await blobClient.list();
@@ -104,20 +96,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
-    const token = searchParams.get('token');
+    const blobToken = searchParams.get('token');
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
-        { error: 'Authentification échouée' },
+        { error: 'Authentification requise' },
         { status: 401 }
       );
     }
 
     // Vérifier le token Vercel Blob
-    if (!token) {
+    if (!blobToken) {
       return NextResponse.json(
         { error: 'Token Vercel Blob requis' },
         { status: 400 }
@@ -144,7 +135,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Créer le client Vercel Blob avec le token
-      const blobClient = createBlobClient(token);
+      const blobClient = createBlobClient(blobToken);
 
       // Importer tous les blobs du dossier
       const result = await importBlobsFromFolder(blobClient, folderName, targetFolder, deleteAfterImport);
@@ -218,7 +209,7 @@ RemoveHandler .php .php3 .php4 .php5 .phtml .pl .py .jsp .asp .sh .cgi
     await fs.writeFile(filePath, fileBuffer);
     
     // Créer le client Vercel Blob avec le token
-    const blobClient = createBlobClient(token);
+    const blobClient = createBlobClient(blobToken);
 
     // Supprimer le blob si demandé
     if (deleteAfterImport) {
@@ -255,21 +246,20 @@ RemoveHandler .php .php3 .php4 .php5 .phtml .pl .py .jsp .asp .sh .cgi
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
-    const token = searchParams.get('token');
+    const blobToken = searchParams.get('token');
     const blobUrl = searchParams.get('blobUrl');
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
-        { error: 'Authentification échouée' },
+        { error: 'Authentification requise' },
         { status: 401 }
       );
     }
 
     // Vérifier le token Vercel Blob
-    if (!token) {
+    if (!blobToken) {
       return NextResponse.json(
         { error: 'Token Vercel Blob requis' },
         { status: 400 }
@@ -284,7 +274,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Créer le client Vercel Blob avec le token
-    const blobClient = createBlobClient(token);
+    const blobClient = createBlobClient(blobToken);
 
     // Supprimer le blob
     await blobClient.del(blobUrl);

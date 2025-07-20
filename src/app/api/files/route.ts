@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-// Fonction pour vérifier l'authentification
-function checkAuth(username: string, password: string): boolean {
-  const expectedUser = process.env.USER;
-  const expectedPassword = process.env.PASSWORD;
-  
-  return username === expectedUser && password === expectedPassword;
-}
+import { checkAuthFromToken } from '@/lib/auth';
 
 // Fonction pour valider le nom du dossier
 function isValidFolderName(folderName: string): boolean {
@@ -27,15 +21,78 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// Fonction récursive pour lister tous les fichiers dans un dossier et ses sous-dossiers
+async function listFilesRecursively(dirPath: string, baseFolder: string = ''): Promise<Array<{
+  name: string;
+  path: string;
+  folder: string;
+  size: number;
+  sizeFormatted: string;
+  type: string;
+  modifiedAt: string;
+  modifiedAtFormatted: string;
+}>> {
+  const files: Array<{
+    name: string;
+    path: string;
+    folder: string;
+    size: number;
+    sizeFormatted: string;
+    type: string;
+    modifiedAt: string;
+    modifiedAtFormatted: string;
+  }> = [];
+  
+  try {
+    const items = await fs.readdir(dirPath, { withFileTypes: true });
+    
+    for (const item of items) {
+      const itemPath = path.join(dirPath, item.name);
+      
+      if (item.isDirectory()) {
+        // Récursion pour les sous-dossiers
+        const subFolder = baseFolder ? `${baseFolder}/${item.name}` : item.name;
+        const subFiles = await listFilesRecursively(itemPath, subFolder);
+        files.push(...subFiles);
+      } else if (item.isFile() && item.name !== '.htaccess') {
+        // Ajouter le fichier
+        const fileStats = await fs.stat(itemPath);
+        const relativePath = path.relative(path.join(process.cwd(), 'public', 'uploads'), itemPath);
+        const folder = path.dirname(relativePath);
+        
+        files.push({
+          name: item.name,
+          path: `/uploads/${relativePath}`,
+          folder: folder === '.' ? '' : folder,
+          size: fileStats.size,
+          sizeFormatted: formatFileSize(fileStats.size),
+          type: path.extname(item.name).toLowerCase(),
+          modifiedAt: fileStats.mtime.toISOString(),
+          modifiedAtFormatted: fileStats.mtime.toLocaleDateString('fr-FR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`Erreur lors de la lecture du dossier ${dirPath}:`, error);
+  }
+  
+  return files;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get('username');
-    const password = searchParams.get('password');
     const folder = searchParams.get('folder');
+    const authHeader = request.headers.get('authorization');
     
     // Vérifier l'authentification
-    if (!username || !password || !checkAuth(username, password)) {
+    if (!checkAuthFromToken(authHeader)) {
       return NextResponse.json(
         { error: 'Authentification échouée' },
         { status: 401 }
@@ -45,14 +102,7 @@ export async function GET(request: NextRequest) {
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
     
     if (folder) {
-      // Lister les fichiers dans un dossier spécifique
-      if (!isValidFolderName(folder)) {
-        return NextResponse.json(
-          { error: 'Nom de dossier invalide' },
-          { status: 400 }
-        );
-      }
-      
+      // Lister les fichiers dans un dossier spécifique (peut inclure des sous-dossiers)
       const folderPath = path.join(uploadsDir, folder);
       
       try {
@@ -64,26 +114,9 @@ export async function GET(request: NextRequest) {
           );
         }
         
-        const items = await fs.readdir(folderPath, { withFileTypes: true });
-        const files = [];
-        let totalSize = 0;
-        
-        for (const item of items) {
-          if (item.isFile() && item.name !== '.htaccess') { // Masquer les .htaccess
-            const filePath = path.join(folderPath, item.name);
-            const fileStats = await fs.stat(filePath);
-            
-            files.push({
-              name: item.name,
-              path: `/uploads/${folder}/${item.name}`,
-              size: fileStats.size,
-              sizeFormatted: formatFileSize(fileStats.size),
-              type: path.extname(item.name).toLowerCase()
-            });
-            
-            totalSize += fileStats.size;
-          }
-        }
+        // Utiliser la fonction récursive pour lister tous les fichiers dans ce dossier
+        const files = await listFilesRecursively(folderPath, folder);
+        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
         
         files.sort((a, b) => a.name.localeCompare(b.name));
         
@@ -97,6 +130,7 @@ export async function GET(request: NextRequest) {
         });
         
       } catch (error) {
+        console.error(`Erreur lors de la lecture du dossier ${folder}:`, error);
         return NextResponse.json(
           { error: 'Le dossier n\'existe pas' },
           { status: 404 }
@@ -104,43 +138,14 @@ export async function GET(request: NextRequest) {
       }
       
     } else {
-      // Lister tous les fichiers dans tous les dossiers
+      // Lister tous les fichiers dans tous les dossiers et sous-dossiers
       try {
-        const items = await fs.readdir(uploadsDir, { withFileTypes: true });
-        const folders = items.filter(item => item.isDirectory());
+        // S'assurer que le dossier uploads existe
+        await fs.mkdir(uploadsDir, { recursive: true });
         
-        const allFiles: Array<{
-          name: string;
-          path: string;
-          folder: string;
-          size: number;
-          sizeFormatted: string;
-          type: string;
-        }> = [];
-        let totalSize = 0;
-        
-        for (const folderItem of folders) {
-          const folderPath = path.join(uploadsDir, folderItem.name);
-          const folderItems = await fs.readdir(folderPath, { withFileTypes: true });
-          
-          for (const item of folderItems) {
-            if (item.isFile() && item.name !== '.htaccess') { // Masquer les .htaccess
-              const filePath = path.join(folderPath, item.name);
-              const fileStats = await fs.stat(filePath);
-              
-              allFiles.push({
-                name: item.name,
-                path: `/uploads/${folderItem.name}/${item.name}`,
-                folder: folderItem.name,
-                size: fileStats.size,
-                sizeFormatted: formatFileSize(fileStats.size),
-                type: path.extname(item.name).toLowerCase()
-              });
-              
-              totalSize += fileStats.size;
-            }
-          }
-        }
+        // Utiliser la fonction récursive pour lister tous les fichiers
+        const allFiles = await listFilesRecursively(uploadsDir);
+        const totalSize = allFiles.reduce((sum, file) => sum + file.size, 0);
         
         allFiles.sort((a, b) => a.name.localeCompare(b.name));
         
@@ -153,10 +158,15 @@ export async function GET(request: NextRequest) {
         });
         
       } catch (error) {
-        return NextResponse.json(
-          { error: 'Erreur lors de la lecture des fichiers' },
-          { status: 500 }
-        );
+        console.error('Erreur lors de la lecture des fichiers:', error);
+        // Retourner une réponse vide en cas d'erreur plutôt qu'une erreur 500
+        return NextResponse.json({
+          success: true,
+          files: [],
+          totalFiles: 0,
+          totalSize: 0,
+          totalSizeFormatted: '0 B'
+        });
       }
     }
     
