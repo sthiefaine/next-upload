@@ -54,8 +54,8 @@ async function copyFolderRecursive(source: string, destination: string) {
     if (item.isDirectory()) {
       // Copier récursivement les sous-dossiers
       await copyFolderRecursive(sourcePath, destPath);
-    } else if (item.isFile() && item.name !== '.htaccess') {
-      // Copier les fichiers (sauf .htaccess qui sera recréé)
+    } else if (item.isFile()) {
+      // Copier tous les fichiers (le .htaccess sera écrasé par createHtaccess)
       await fs.copyFile(sourcePath, destPath);
     }
   }
@@ -76,6 +76,31 @@ async function removeFolderRecursive(folderPath: string) {
   }
   
   await fs.rmdir(folderPath);
+}
+
+// Fonction pour scanner récursivement les dossiers
+async function scanFoldersRecursive(dirPath: string, basePath: string = ''): Promise<string[]> {
+  const folders: string[] = [];
+  
+  try {
+    const items = await fs.readdir(dirPath, { withFileTypes: true });
+    
+    for (const item of items) {
+      if (item.isDirectory()) {
+        const folderPath = path.join(basePath, item.name);
+        folders.push(folderPath);
+        
+        // Scanner récursivement les sous-dossiers
+        const subDirPath = path.join(dirPath, item.name);
+        const subFolders = await scanFoldersRecursive(subDirPath, folderPath);
+        folders.push(...subFolders);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur lors du scan du dossier:', dirPath, error);
+  }
+  
+  return folders;
 }
 
 // Fonction pour vérifier si un chemin est un sous-chemin d'un autre
@@ -253,16 +278,25 @@ export async function GET(request: NextRequest) {
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
     
     try {
-      const items = await fs.readdir(uploadsDir, { withFileTypes: true });
-      const folders = items
-        .filter(item => item.isDirectory())
-        .map(item => item.name)
-        .sort();
+      // Scanner récursivement tous les dossiers
+      const allFolders = await scanFoldersRecursive(uploadsDir);
+      
+      // Trier les dossiers (d'abord les dossiers parents, puis les enfants)
+      allFolders.sort((a, b) => {
+        const aDepth = a.split(path.sep).length;
+        const bDepth = b.split(path.sep).length;
+        
+        if (aDepth !== bDepth) {
+          return aDepth - bDepth;
+        }
+        
+        return a.localeCompare(b);
+      });
       
       return NextResponse.json({
         success: true,
-        folders: folders,
-        totalFolders: folders.length
+        folders: allFolders,
+        totalFolders: allFolders.length
       });
       
     } catch (error) {

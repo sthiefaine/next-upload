@@ -188,7 +188,7 @@ export default function UploadPage() {
 
   const loadFolders = async () => {
     try {
-      const response = await fetch('/api/folders');
+      const response = await fetch(`/api/folders?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
       const data = await response.json();
       if (data.success) {
         setFolders(data.folders);
@@ -404,14 +404,14 @@ export default function UploadPage() {
     setFolderResult(null);
 
     try {
-      const formData = new FormData();
-      formData.append('username', username);
-      formData.append('password', password);
-      formData.append('folderName', newFolderName.trim());
-
-      const response = await fetch('/api/folders', {
+      const response = await fetch(`/api/folders?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          folderName: newFolderName.trim()
+        }),
       });
 
       const result: FolderResponse = await response.json();
@@ -1015,31 +1015,60 @@ export default function UploadPage() {
                 <p className="text-gray-500">Aucun dossier créé</p>
               ) : (
                 <div className="space-y-3">
-                  {folders.map((folder) => (
-                    <div key={folder} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <span className="font-medium text-gray-900">{folder}</span>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => confirmMove('folder', folder)}
-                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Déplacer
-                        </button>
-                        <button
-                          onClick={() => confirmRename('folder', folder)}
-                          className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm"
-                        >
-                          Renommer
-                        </button>
-                        <button
-                          onClick={() => confirmDelete('folder', folder)}
-                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {folders
+                    .sort((a, b) => {
+                      // Trier d'abord par profondeur, puis par ordre alphabétique
+                      const aDepth = a.split('/').length;
+                      const bDepth = b.split('/').length;
+                      
+                      if (aDepth !== bDepth) {
+                        return aDepth - bDepth;
+                      }
+                      
+                      // Si même profondeur, trier par ordre alphabétique
+                      return a.localeCompare(b);
+                    })
+                    .map((folder) => {
+                      const depth = folder.split('/').length - 1;
+                      const indent = depth * 16; // 16px par niveau
+                      const folderName = folder.split('/').pop() || folder;
+                      
+                      return (
+                        <div key={folder} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center flex-1 min-w-0">
+                            <div style={{ marginLeft: `${indent}px` }} className="flex items-center">
+                              {depth > 0 && (
+                                <span className="text-gray-400 mr-2">└─</span>
+                              )}
+                              <span className="font-medium text-gray-900 truncate">{folderName}</span>
+                              {depth > 0 && (
+                                <span className="text-xs text-gray-500 ml-2">({folder})</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex space-x-2 ml-4">
+                            <button
+                              onClick={() => confirmMove('folder', folder)}
+                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                            >
+                              Déplacer
+                            </button>
+                            <button
+                              onClick={() => confirmRename('folder', folder)}
+                              className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm"
+                            >
+                              Renommer
+                            </button>
+                            <button
+                              onClick={() => confirmDelete('folder', folder)}
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
