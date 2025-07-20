@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         let totalSize = 0;
         
         for (const item of items) {
-          if (item.isFile()) {
+          if (item.isFile() && item.name !== '.htaccess') { // Masquer les .htaccess
             const filePath = path.join(folderPath, item.name);
             const fileStats = await fs.stat(filePath);
             
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
           const folderItems = await fs.readdir(folderPath, { withFileTypes: true });
           
           for (const item of folderItems) {
-            if (item.isFile()) {
+            if (item.isFile() && item.name !== '.htaccess') { // Masquer les .htaccess
               const filePath = path.join(folderPath, item.name);
               const fileStats = await fs.stat(filePath);
               

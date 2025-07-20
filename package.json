@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@types/formidable": "^3.4.5",
+    "@vercel/blob": "^1.1.1",
     "formidable": "^3.5.4",
     "next": "15.4.2",
     "react": "19.1.0",
