@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Upload API</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Test Upload API</h1>
+    
+    <div class="form-group">
+        <label for="token">Token d'authentification:</label>
+        <input type="text" id="token" value="jepeuxdeposerdesimagesjdsnfsdkf" placeholder="Votre token">
+    </div>
+    
+    <div class="form-group">
+        <label for="folder">Dossier de destination:</label>
+        <select id="folder">
+            <option value="images">images</option>
+            <option value="podcasts">podcasts</option>
+            <option value="podcasts/films">podcasts/films</option>
+            <option value="podcasts/films/action">podcasts/films/action</option>
+            <option value="series">series</option>
+            <option value="series/drame">series/drame</option>
+        </select>
+        <small>Ou tapez un chemin personnalisé:</small>
+        <input type="text" id="customFolder" placeholder="ex: mon-dossier/sous-dossier">
+    </div>
+    
+    <div class="form-group">
+        <label for="files">Fichiers à uploader:</label>
+        <input type="file" id="files" multiple accept="image/*">
+    </div>
+    
+    <button onclick="uploadFiles()">Uploader les fichiers</button>
+    
+    <div id="result"></div>
+
+    <script>
+        async function uploadFiles() {
+            const token = document.getElementById('token').value;
+            const folderSelect = document.getElementById('folder');
+            const customFolder = document.getElementById('customFolder').value;
+            const files = document.getElementById('files').files;
+            const resultDiv = document.getElementById('result');
+            
+            // Utiliser le dossier personnalisé s'il est fourni, sinon le sélectionné
+            const folder = customFolder || folderSelect.value;
+            
+            if (!token) {
+                resultDiv.innerHTML = '<div class="result error">Token requis</div>';
+                return;
+            }
+            
+            if (files.length === 0) {
+                resultDiv.innerHTML = '<div class="result error">Sélectionnez au moins un fichier</div>';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('folder', folder);
+            
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>✅ Upload réussi!</h3>
+                            <p><strong>Message:</strong> ${data.message}</p>
+                            <p><strong>Dossier:</strong> ${folder}</p>
+                            <p><strong>Fichiers uploadés:</strong></p>
+                            <ul>
+                                ${data.files.map(file => `<li>${file}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Erreur d'upload</h3>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <p><strong>Erreur:</strong> ${data.error}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Erreur réseau</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html> 

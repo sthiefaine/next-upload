@@ -6,15 +6,13 @@ export function checkAuthFromToken(authHeader: string | null): boolean {
 
   const token = authHeader.substring(7);
 
-  // Vérifier si le token a le bon format (token_USERID_TIMESTAMP)
-  const tokenParts = token.split("_");
-  if (tokenParts.length < 3) {
-    return false;
+  // Vérifier le token d'écriture
+  const writeToken = process.env.UPLOADFILES_WRITE_TOKEN;
+  if (writeToken && token === writeToken) {
+    return true;
   }
 
-  // Pour simplifier, on accepte tous les tokens valides
-  // En production, vous devriez vérifier la validité du token
-  return true;
+  return false;
 }
 
 // Fonction pour extraire le token depuis le header Authorization

@@ -28,10 +28,21 @@ function generateUniqueFilename(originalFilename: string): string {
   return `${nameWithoutExt}_${timestamp}_${randomString}${extension}`;
 }
 
-// Fonction pour valider le nom du dossier
-function isValidFolderName(folderName: string): boolean {
-  const validPattern = /^[a-zA-Z0-9_-]+$/;
-  return validPattern.test(folderName) && folderName.length > 0 && folderName.length <= 50;
+// Fonction pour valider le chemin du dossier (peut inclure des sous-dossiers)
+function isValidFolderPath(folderPath: string): boolean {
+  // Permettre les chemins comme "podcasts", "podcasts/films", "podcasts/films/action"
+  const validPattern = /^[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*$/;
+  return validPattern.test(folderPath) && folderPath.length > 0 && folderPath.length <= 200;
+}
+
+// Fonction pour créer récursivement un dossier et ses sous-dossiers
+async function ensureFolderExists(folderPath: string): Promise<void> {
+  try {
+    await fs.mkdir(folderPath, { recursive: true });
+  } catch (error) {
+    console.error(`Erreur lors de la création du dossier ${folderPath}:`, error);
+    throw new Error(`Impossible de créer le dossier: ${folderPath}`);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -49,9 +60,9 @@ export async function POST(request: NextRequest) {
     }
     
     // Vérifier le dossier
-    if (!folder || !isValidFolderName(folder)) {
+    if (!folder || !isValidFolderPath(folder)) {
       return NextResponse.json(
-        { error: 'Dossier invalide' },
+        { error: 'Chemin de dossier invalide' },
         { status: 400 }
       );
     }
@@ -69,19 +80,13 @@ export async function POST(request: NextRequest) {
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
     const targetFolder = path.join(uploadsDir, folder);
     
-    // Vérifier que le dossier existe
+    // Créer le dossier et ses sous-dossiers s'ils n'existent pas
     try {
-      const stats = await fs.stat(targetFolder);
-      if (!stats.isDirectory()) {
-        return NextResponse.json(
-          { error: 'Le dossier spécifié n\'existe pas' },
-          { status: 400 }
-        );
-      }
+      await ensureFolderExists(targetFolder);
     } catch (error) {
       return NextResponse.json(
-        { error: 'Le dossier spécifié n\'existe pas' },
-        { status: 400 }
+        { error: `Impossible de créer le dossier: ${error instanceof Error ? error.message : 'Erreur inconnue'}` },
+        { status: 500 }
       );
     }
     
