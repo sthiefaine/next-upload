@@ -65,6 +65,14 @@ interface ImportBlobResponse {
   error?: string;
 }
 
+interface MoveResponse {
+  success: boolean;
+  message: string;
+  source?: string;
+  destination?: string;
+  error?: string;
+}
+
 export default function UploadPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
@@ -114,6 +122,15 @@ export default function UploadPage() {
   const [isBatchImporting, setIsBatchImporting] = useState(false);
   const [selectedBlobSourceFolder, setSelectedBlobSourceFolder] = useState('');
   const [selectedBlobDestFolder, setSelectedBlobDestFolder] = useState('');
+  
+  // États pour le déplacement
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveResult, setMoveResult] = useState<MoveResponse | null>(null);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveType, setMoveType] = useState<'folder' | 'file'>('folder');
+  const [moveSource, setMoveSource] = useState('');
+  const [moveDestination, setMoveDestination] = useState('');
+  const [availableFolders, setAvailableFolders] = useState<string[]>([]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +140,7 @@ export default function UploadPage() {
       loadFolders();
       loadFiles();
       loadBlobs();
+      loadAvailableFolders();
     }
   };
 
@@ -160,6 +178,12 @@ export default function UploadPage() {
     setDeleteAfterImport(false);
     setBlobToken('');
     setIsBlobConfigured(false);
+    // Reset move states
+    setMoveResult(null);
+    setShowMoveModal(false);
+    setMoveSource('');
+    setMoveDestination('');
+    setAvailableFolders([]);
   };
 
   const loadFolders = async () => {
@@ -188,6 +212,18 @@ export default function UploadPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des fichiers:', error);
+    }
+  };
+
+  const loadAvailableFolders = async () => {
+    try {
+      const response = await fetch(`/api/move?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+      const data = await response.json();
+      if (data.success) {
+        setAvailableFolders(data.folders);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des dossiers disponibles:', error);
     }
   };
 
@@ -502,6 +538,62 @@ export default function UploadPage() {
     setRenameOldName(oldName);
     setRenameNewName(currentName || oldName);
     setShowRenameModal(true);
+  };
+
+  const confirmMove = (type: 'folder' | 'file', source: string) => {
+    setMoveType(type);
+    setMoveSource(source);
+    setMoveDestination('');
+    setShowMoveModal(true);
+    loadAvailableFolders();
+  };
+
+  const handleMove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!moveDestination.trim()) {
+      alert('Veuillez saisir une destination');
+      return;
+    }
+
+    setIsMoving(true);
+    setMoveResult(null);
+
+    try {
+      const response = await fetch(`/api/move?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: moveSource,
+          destination: moveDestination,
+          type: moveType
+        }),
+      });
+
+      const result: MoveResponse = await response.json();
+
+      if (result.success) {
+        setMoveResult(result);
+        setShowMoveModal(false);
+        // Recharger les données
+        loadFolders();
+        loadFiles();
+        loadAvailableFolders();
+      } else {
+        setMoveResult(result);
+      }
+    } catch (error) {
+      console.error('Erreur lors du déplacement:', error);
+      setMoveResult({
+        success: false,
+        message: 'Erreur lors du déplacement',
+        error: 'Erreur réseau'
+      });
+    } finally {
+      setIsMoving(false);
+    }
   };
 
   const handleFileUpload = async (e: React.FormEvent) => {
@@ -928,6 +1020,12 @@ export default function UploadPage() {
                       <span className="font-medium text-gray-900">{folder}</span>
                       <div className="flex space-x-2">
                         <button
+                          onClick={() => confirmMove('folder', folder)}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Déplacer
+                        </button>
+                        <button
                           onClick={() => confirmRename('folder', folder)}
                           className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm"
                         >
@@ -966,6 +1064,12 @@ export default function UploadPage() {
                         <p className="text-sm text-gray-500">{file.folder} • {file.type} • {file.sizeFormatted}</p>
                       </div>
                       <div className="flex space-x-2 ml-4">
+                        <button
+                          onClick={() => confirmMove('file', file.path)}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                        >
+                          Déplacer
+                        </button>
                         <button
                           onClick={() => confirmRename('file', file.path, file.name)}
                           className="px-3 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors text-sm"
@@ -1068,6 +1172,78 @@ export default function UploadPage() {
                       : 'bg-red-50 border border-red-200 text-red-800'
                   }`}>
                     <p className="text-sm">{renameResult.message}</p>
+                  </div>
+                )}
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showMoveModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                Déplacer {moveType === 'folder' ? 'le dossier' : 'le fichier'}
+              </h3>
+              <form onSubmit={handleMove} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Source
+                  </label>
+                  <input
+                    type="text"
+                    value={moveSource}
+                    disabled
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Destination
+                  </label>
+                  <select
+                    value={moveDestination}
+                    onChange={(e) => setMoveDestination(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                    required
+                  >
+                    <option value="">Sélectionner une destination</option>
+                    <option value="">Racine (uploads/)</option>
+                    {availableFolders
+                      .filter(folder => folder !== moveSource.split('/')[0]) // Exclure le dossier source
+                      .map((folder) => (
+                        <option key={folder} value={folder}>
+                          {folder}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Si la destination existe déjà, le contenu sera fusionné.
+                  </p>
+                </div>
+                <div className="flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowMoveModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isMoving}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {isMoving ? 'Déplacement...' : 'Déplacer'}
+                  </button>
+                </div>
+                {moveResult && (
+                  <div className={`mt-4 p-3 rounded-lg ${
+                    moveResult.success 
+                      ? 'bg-green-50 border border-green-200 text-green-800' 
+                      : 'bg-red-50 border border-red-200 text-red-800'
+                  }`}>
+                  <p className="text-sm">{moveResult.message}</p>
                   </div>
                 )}
               </form>
