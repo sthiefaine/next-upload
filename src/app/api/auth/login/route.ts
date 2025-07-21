@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Génération d'un token simple (en production, utilisez JWT)
-    const token = `token_${user.id}_${Date.now()}`
+    const token = process.env.UPLOADFILES_WRITE_TOKEN;
 
     // Retour des données utilisateur (sans le mot de passe)
     const userData = {
