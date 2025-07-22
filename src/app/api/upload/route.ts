@@ -21,6 +21,7 @@ function isValidFileType(mimetype: string): boolean {
     "application/x-subrip",
     "text/x-srt",
     "text/x-vtt",
+    "application/octet-stream"
   ];
 
   return allowedTypes.includes(mimetype);
@@ -29,11 +30,11 @@ function isValidFileType(mimetype: string): boolean {
 // Fonction pour générer un nom de fichier unique
 function generateUniqueFilename(originalFilename: string): string {
   const timestamp = Date.now();
-  const randomString = Math.random().toString(36).substring(2, 15);
+  const randomString = Math.random().toString(36).substring(2, 30);
   const extension = path.extname(originalFilename);
   const nameWithoutExt = path.basename(originalFilename, extension);
 
-  return `${nameWithoutExt}_${timestamp}_${randomString}${extension}`;
+  return `${nameWithoutExt}_${randomString}${extension}`;
 }
 
 // Fonction pour valider le chemin du dossier (peut inclure des sous-dossiers)
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Récupérer les fichiers
     const files = formData.getAll("files") as File[];
-    console.log(files);
+    console.log('files', files);
 
     if (!files || files.length === 0) {
       return NextResponse.json(

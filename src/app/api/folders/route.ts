@@ -9,22 +9,17 @@ async function scanFoldersRecursive(dirPath: string, basePath: string = ''): Pro
   const folders: string[] = [];
   
   try {
-    console.log(`🔍 Scanning directory: ${dirPath} (base: ${basePath})`);
     const items = await fs.readdir(dirPath, { withFileTypes: true });
-    console.log(`📁 Found ${items.length} items in ${dirPath}:`, items.map(item => `${item.name} (${item.isDirectory() ? 'dir' : 'file'})`));
     
     for (const item of items) {
       if (item.isDirectory()) {
         // Utiliser des forward slashes pour la cohérence
         const folderPath = basePath ? `${basePath}/${item.name}` : item.name;
-        console.log(`📂 Adding folder: ${folderPath}`);
         folders.push(folderPath);
         
         // Scanner récursivement les sous-dossiers
         const subDirPath = path.join(dirPath, item.name);
-        console.log(`🔍 Recursively scanning: ${subDirPath}`);
         const subFolders = await scanFoldersRecursive(subDirPath, folderPath);
-        console.log(`📂 Found ${subFolders.length} subfolders in ${item.name}:`, subFolders);
         folders.push(...subFolders);
       }
     }
@@ -32,7 +27,6 @@ async function scanFoldersRecursive(dirPath: string, basePath: string = ''): Pro
     console.error(`❌ Error scanning directory ${dirPath}:`, error);
   }
   
-  console.log(`✅ Total folders found in ${dirPath}: ${folders.length}`, folders);
   return folders;
 }
 
@@ -54,13 +48,10 @@ export async function GET(request: NextRequest) {
     try {
       // S'assurer que le dossier uploads existe
       await fs.mkdir(uploadsDir, { recursive: true });
-      console.log(`📁 Uploads directory ensured: ${uploadsDir}`);
       
-      console.log(`🚀 Starting recursive scan of: ${uploadsDir}`);
       
       // Scanner récursivement tous les dossiers
       const allFolders = await scanFoldersRecursive(uploadsDir);
-      console.log(`📊 Raw folders found:`, allFolders);
       
       // Trier les dossiers (d'abord les dossiers parents, puis les enfants)
       allFolders.sort((a, b) => {
@@ -73,9 +64,6 @@ export async function GET(request: NextRequest) {
         
         return a.localeCompare(b);
       });
-      
-      console.log(`📊 Sorted folders:`, allFolders);
-      console.log(`📊 Total folders: ${allFolders.length}`);
       
       return NextResponse.json({
         success: true,
