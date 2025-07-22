@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Récupérer les fichiers
     const files = formData.getAll("files") as File[];
+    console.log(files);
 
     if (!files || files.length === 0) {
       return NextResponse.json(
