@@ -5,14 +5,22 @@ import path from "path";
 import { checkAuthFromToken } from "@/lib/auth";
 
 // Fonction pour valider le type MIME
-function isValidImageType(mimetype: string): boolean {
+function isValidFileType(mimetype: string): boolean {
   const allowedTypes = [
+    // Images
     "image/jpeg",
     "image/jpg",
     "image/png",
     "image/gif",
     "image/webp",
     "image/svg+xml",
+    // Fichiers texte
+    "text/plain",
+    "text/srt",
+    "text/vtt",
+    "application/x-subrip",
+    "text/x-srt",
+    "text/x-vtt",
   ];
 
   return allowedTypes.includes(mimetype);
@@ -105,7 +113,7 @@ export async function POST(request: NextRequest) {
 
     for (const file of files) {
       // Vérifier le type MIME
-      if (!isValidImageType(file.type)) {
+      if (!isValidFileType(file.type)) {
         return NextResponse.json(
           { error: `Type de fichier non autorisé: ${file.type}` },
           { status: 400 }
