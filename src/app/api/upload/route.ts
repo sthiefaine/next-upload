@@ -30,7 +30,7 @@ function isValidFileType(mimetype: string): boolean {
 // Fonction pour générer un nom de fichier unique
 function generateUniqueFilename(originalFilename: string): string {
   const timestamp = Date.now();
-  const randomString = Math.random().toString(36).substring(2, 30);
+  const randomString = Math.random().toString(36);
   const extension = path.extname(originalFilename);
   const nameWithoutExt = path.basename(originalFilename, extension);
 

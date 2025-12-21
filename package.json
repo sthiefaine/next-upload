@@ -16,9 +16,9 @@
     "@types/formidable": "^3.4.5",
     "@vercel/blob": "^1.1.1",
     "formidable": "^3.5.4",
-    "next": "15.4.2",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "next": "15.4.8",
+    "react": "19.1.2",
+    "react-dom": "19.1.2",
     "zustand": "^5.0.6"
   },
   "devDependencies": {
