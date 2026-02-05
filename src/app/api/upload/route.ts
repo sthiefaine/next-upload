@@ -21,7 +21,9 @@ function isValidFileType(mimetype: string): boolean {
     "application/x-subrip",
     "text/x-srt",
     "text/x-vtt",
-    "application/octet-stream"
+    "application/octet-stream",
+    // Transcriptions
+    "application/json"
   ];
 
   return allowedTypes.includes(mimetype);

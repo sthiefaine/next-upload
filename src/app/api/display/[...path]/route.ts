@@ -24,6 +24,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ".txt": "text/plain",
       ".srt": "text/srt",
       ".vtt": "text/vtt",
+      ".json": "application/json",
     };
     const contentType = mimeTypes[ext] || "application/octet-stream";
 
