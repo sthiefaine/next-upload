@@ -39,6 +39,13 @@ function generateUniqueFilename(originalFilename: string): string {
   return `${nameWithoutExt}_${randomString}${extension}`;
 }
 
+// Nom de fichier conservé tel quel (mode keepName) : pour les médias
+// canoniques partagés entre sites (ex. media/films/{tmdbId}.jpg), le nom
+// doit être déterministe. Sanitize strict contre le path traversal.
+function sanitizeKeptFilename(originalFilename: string): string {
+  return path.basename(originalFilename).replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
 // Fonction pour valider le chemin du dossier (peut inclure des sous-dossiers)
 function isValidFolderPath(folderPath: string): boolean {
   // Permettre les chemins comme "podcasts", "podcasts/films", "podcasts/films/action"
@@ -68,6 +75,9 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const authHeader = request.headers.get("authorization");
     const folder = formData.get("folder") as string;
+    // Mode opt-in : conserver le nom de fichier original (médias canoniques).
+    // Un upload du même nom écrase le fichier existant (idempotent).
+    const keepName = formData.get("keepName") === "true";
 
     // Vérifier l'authentification
     if (!checkAuthFromToken(authHeader)) {
@@ -132,8 +142,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Générer un nom unique
-      const uniqueFilename = generateUniqueFilename(file.name);
+      // Générer un nom unique, ou conserver le nom original (mode keepName)
+      const uniqueFilename = keepName
+        ? sanitizeKeptFilename(file.name)
+        : generateUniqueFilename(file.name);
       const destinationPath = path.join(targetFolder, uniqueFilename);
 
       // Convertir le fichier en buffer et l'écrire
