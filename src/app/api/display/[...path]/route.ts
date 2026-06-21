@@ -25,6 +25,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ".srt": "text/srt",
       ".vtt": "text/vtt",
       ".json": "application/json",
+      ".mp3": "audio/mpeg",
+      ".m4a": "audio/mp4",
+      ".aac": "audio/aac",
+      ".wav": "audio/wav",
+      ".ogg": "audio/ogg",
     };
     const contentType = mimeTypes[ext] || "application/octet-stream";
 
