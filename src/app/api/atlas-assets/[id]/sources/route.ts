@@ -1,4 +1,4 @@
-/** Sources Atlas privées : volume persistant requis, aucun accès via public/uploads. */
+/** Sources Atlas privées sur le volume uploads existant, comme les podcasts. */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -12,8 +12,8 @@ async function contexte(req:Request,ctx:Ctx){
   if(!checkAuthFromToken(req.headers.get('authorization')))return json({error:'unauthorized'},401);
   const {id}=await ctx.params;
   if(!/^(batiment|unite|kit|terrain|decor|commandant|effet)_[a-z0-9_]{1,160}$/.test(id))return json({error:'invalid_asset'},400);
-  const root=process.env.ATLAS_SOURCES_DIR;
-  if(!root||!path.isAbsolute(root))return json({error:'storage_not_configured'},503);
+  const root=process.env.ATLAS_SOURCES_DIR || path.join(process.cwd(), 'public', 'uploads', 'atlas', 'sources');
+  if(!path.isAbsolute(root))return json({error:'storage_not_configured'},503);
   return path.join(root,id);
 }
 export async function GET(req:Request,ctx:Ctx){

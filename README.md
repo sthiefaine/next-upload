@@ -252,3 +252,8 @@ pnpm lint
 ## 📄 Licence
 
 MIT License - voir le fichier LICENSE pour plus de détails.
+
+
+### Sources GLB Atlas
+
+Le dépôt privé `/api/atlas-assets/{id}/sources` utilise automatiquement `public/uploads/atlas/sources`, sur le même volume que les podcasts. Les dossiers sont créés au premier dépôt. Aucun nouveau volume ni variable n’est nécessaire. `ATLAS_SOURCES_DIR` reste une surcharge optionnelle (chemin absolu) pour les installations déjà configurées. Les accès directs `/uploads/atlas/sources` et `/api/display/atlas/sources` sont bloqués ; lecture et écriture passent par l’API avec le jeton d’écriture existant. Les podcasts conservent leurs chemins et leur accès public.

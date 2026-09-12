@@ -91,6 +91,12 @@ export async function GET(
     return NextResponse.json({ error: "Chemin invalide" }, { status: 400 });
   }
 
+  // Défense également dans la route : les sources ne sont pas des médias publics.
+  const sourcesAtlas = path.join(uploadsRoot, "atlas", "sources");
+  if (filePath === sourcesAtlas || filePath.startsWith(sourcesAtlas + path.sep)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
+
   try {
     const file = await fs.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
